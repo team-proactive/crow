@@ -1,112 +1,100 @@
+import {
+  BodyPixInternalResolution,
+  MediaPipeConfig,
+  RunningMode,
+} from "../../types/mediapipe";
+
 /**
- * MediaPipe 설정 파일
+ * MediaPipe 설정
  *
- * MediaPipe 모델 URL 및 설정 값을 정의하는 상수 모음입니다.
- * @module constants/mediapipe
+ * MediaPipe 라이브러리 사용을 위한 전역 설정 값들을 정의합니다.
+ * 모델 URL, 랜드마크 시각화 옵션, 실행 모드, 세그멘테이션 설정, 색상 설정 등을 포함합니다.
  */
-
-import { BodyPixInternalResolution, RunningMode } from "../../types/mediapipe";
-
-/**
- * 모델 URL 상수 정의
- * - objectDetector: EfficientDet Lite0 모델 URL
- * - faceLandmarker: Face Landmarker 모델 URL
- * - gestureRecognizer: Gesture Recognizer 모델 URL
- */
-const MODEL_URLS = {
-  objectDetector:
-    "https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/float16/1/efficientdet_lite0.tflite",
-  faceLandmarker:
-    "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
-  gestureRecognizer:
-    "https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task",
-};
-
-/**
- * 랜드마크 시각화 설정 상수
- * - showFaceLandmarks: 얼굴 랜드마크 시각화 여부
- * - showHandLandmarks: 손 랜드마크 시각화 여부
- * - showObjectDetections: 객체 감지 시각화 여부
- */
-const LANDMARK_VISUALIZATION = {
-  showFaceLandmarks: false,
-  showHandLandmarks: true,
-  showObjectDetections: false,
-};
-
-/**
- * 실행 모드 상수 정의
- * - image: 이미지 모드
- * - video: 비디오 모드
- * - liveStream: 라이브 스트림 모드
- */
-const RUNNING_MODES: { [key: string]: RunningMode } = {
-  image: "IMAGE",
-  video: "VIDEO",
-  liveStream: "LIVE_STREAM",
-};
-
-/**
- * 세그멘테이션 설정 상수
- * - internalResolution: 내부 해상도 (high)
- * - segmentationThreshold: 세그멘테이션 임계값 (0.7)
- * - scoreThreshold: 점수 임계값 (0.5)
- */
-const SEGMENTATION_CONFIG: {
-  internalResolution: BodyPixInternalResolution;
-  segmentationThreshold: number;
-  scoreThreshold: number;
-} = {
-  internalResolution: "medium",
-  segmentationThreshold: 0.7,
-  scoreThreshold: 0.5,
-};
-
-/**
- * 색상 설정 상수
- * - 얼굴 랜드마크: 각 요소에 대한 색상 설정
- * - 객체 감지: 경계 상자 및 텍스트 색상
- * - 손 랜드마크: 연결선 및 점 색상
- */
-const COLOR_SETTINGS = {
-  faceLandmarks: {
-    tesselation: { color: "#C0C0C070", lineWidth: 1 },
-    rightEye: { color: "#FF3030" },
-    rightEyebrow: { color: "#FF3030" },
-    leftEye: { color: "#30FF30" },
-    leftEyebrow: { color: "#30FF30" },
-    faceOval: { color: "#E0E0E0" },
-    lips: { color: "#E0E0E0" },
-    rightIris: { color: "#FF3030" },
-    leftIris: { color: "#30FF30" },
+const MEDIAPIPE_CONFIG: MediaPipeConfig = {
+  /**
+   * 모델 URL
+   *
+   * 객체 감지, 얼굴 랜드마크, 제스처 인식을 위한 모델 파일의 URL을 정의합니다.
+   */
+  MODEL_URLS: {
+    objectDetector:
+      "https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/float16/1/efficientdet_lite0.tflite",
+    faceLandmarker:
+      "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
+    gestureRecognizer:
+      "https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task",
   },
-  objectDetection: {
-    boundingBox: { color: "red", lineWidth: 2 },
-    text: { color: "red" },
+
+  /**
+   * 랜드마크 시각화 설정
+   *
+   * 얼굴 랜드마크, 손 랜드마크, 객체 감지 결과의 시각화 여부를 설정합니다.
+   */
+  LANDMARK_VISUALIZATION: {
+    showFaceLandmarks: false,
+    showHandLandmarks: true,
+    showObjectDetections: true,
   },
-  handLandmarks: {
-    connections: { color: "#00FF00", lineWidth: 5 },
-    points: { color: "#FF0000", lineWidth: 2 },
+
+  /**
+   * 실행 모드
+   *
+   * MediaPipe 작업의 실행 모드를 정의합니다. 이미지, 비디오, 라이브 스트림 모드를 지원합니다.
+   */
+  RUNNING_MODES: {
+    image: "IMAGE",
+    video: "VIDEO",
+    liveStream: "LIVE_STREAM",
+  } as { [key: string]: RunningMode },
+
+  /**
+   * 세그멘테이션 설정
+   *
+   * BodyPix 모델의 세그멘테이션 관련 설정을 정의합니다.
+   */
+  SEGMENTATION_CONFIG: {
+    internalResolution: "high" as BodyPixInternalResolution,
+    segmentationThreshold: 0.7,
+    scoreThreshold: 0.5,
+  },
+
+  /**
+   * 색상 설정
+   *
+   * 얼굴 랜드마크, 객체 감지, 손 랜드마크 시각화에 사용될 색상을 정의합니다.
+   */
+  COLOR_SETTINGS: {
+    faceLandmarks: {
+      tesselation: { color: "#C0C0C070", lineWidth: 1 },
+      rightEye: { color: "#FF3030" },
+      rightEyebrow: { color: "#FF3030" },
+      leftEye: { color: "#30FF30" },
+      leftEyebrow: { color: "#30FF30" },
+      faceOval: { color: "#E0E0E0" },
+      lips: { color: "#E0E0E0" },
+      rightIris: { color: "#FF3030" },
+      leftIris: { color: "#30FF30" },
+    },
+    objectDetection: {
+      boundingBox: { color: "green", lineWidth: 2 },
+      text: { color: "white" },
+    },
+    handLandmarks: {
+      connections: { color: "yellow", lineWidth: 2 },
+      points: { color: "purple", lineWidth: 1 },
+    },
+  },
+
+  /**
+   * 가상 배경 설정
+   *
+   * 가상 배경 기능 사용 여부, 배경색, 투명도 등을 설정합니다.
+   */
+  VIRTUAL_BACKGROUND_SETTINGS: {
+    enable: false,
+    backgroundColor: { r: 0, g: 0, b: 0, a: 255 },
+    transparency: 0.5,
   },
 };
 
-/**
- * 가상 배경 설정 상수
- * - enable: 가상 배경 사용 여부
- * - backgroundColor: 가상 배경 색상 설정
- * - transparency: 가상 배경 투명도 설정
- */
-const VIRTUAL_BACKGROUND_SETTINGS = {
-  enable: false,
-  backgroundColor: { r: 0, g: 0, b: 0, a: 255 }, // 검정색 배경
-  transparency: 0.5, // 투명도
-};
-
-export {
-  COLOR_SETTINGS,
-  LANDMARK_VISUALIZATION,
-  MODEL_URLS,
-  RUNNING_MODES,
-  SEGMENTATION_CONFIG,
-  VIRTUAL_BACKGROUND_SETTINGS,
-};
+export default MEDIAPIPE_CONFIG;
