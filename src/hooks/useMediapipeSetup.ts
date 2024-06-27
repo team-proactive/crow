@@ -347,11 +347,18 @@ export default function useMediapipeSetup(
                 MEDIAPIPE_CONFIG.COLOR_SETTINGS.objectDetection.boundingBox.color;
               ctx.lineWidth =
                 MEDIAPIPE_CONFIG.COLOR_SETTINGS.objectDetection.boundingBox.lineWidth;
+              // bounding box 크기를 0.5배로 줄이기
+              const scaledBoundingBox = {
+                originX: detection.boundingBox.originX,
+                originY: detection.boundingBox.originY,
+                width: detection.boundingBox.width,
+                height: detection.boundingBox.height,
+              };
               ctx.strokeRect(
-                detection.boundingBox.originX,
-                detection.boundingBox.originY,
-                detection.boundingBox.width,
-                detection.boundingBox.height
+                scaledBoundingBox.originX,
+                scaledBoundingBox.originY,
+                scaledBoundingBox.width,
+                scaledBoundingBox.height
               );
 
               ctx.fillStyle =
@@ -360,9 +367,9 @@ export default function useMediapipeSetup(
                 `${detection.categories[0].categoryName} - ${(
                   detection.categories[0].score * 100
                 ).toFixed(2)}%`,
-                detection.boundingBox.originX,
-                detection.boundingBox.originY > 10
-                  ? detection.boundingBox.originY - 5
+                scaledBoundingBox.originX,
+                scaledBoundingBox.originY > 100
+                  ? scaledBoundingBox.originY - 5
                   : 10
               );
             }
@@ -395,7 +402,7 @@ export default function useMediapipeSetup(
         ctx.fillText(`Interest Score: ${interestScore.toFixed(2)}%`, 200, 25);
       }
     },
-    [canvasRef, videoRef, bodyPixNet]
+    [canvasRef, videoRef]
   );
 
   /**
