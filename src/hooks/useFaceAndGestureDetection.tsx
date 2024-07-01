@@ -62,7 +62,7 @@ export default function useFaceAndGestureDetection(
             delegate: "GPU",
           },
           runningMode: MEDIAPIPE_CONFIG.RUNNING_MODES.liveStream,
-          numHands: 2,
+          numHands: 10,
         }
       );
       return gestureRecognizer;

@@ -20,6 +20,8 @@ export default function App() {
   const [objectDetectionEnabled, setObjectDetectionEnabled] = useState(false);
   const [faceGestureDetectionEnabled, setFaceGestureDetectionEnabled] =
     useState(false);
+  const [comboCount, setComboCount] = useState(0);
+  const [timer, setTimer] = useState<NodeJS.Timeout | null>(null);
 
   const {
     enableWebcam: enableObjectDetection,
@@ -55,6 +57,23 @@ export default function App() {
     loadBodyPix();
   }, []);
 
+  useEffect(() => {
+    if (focusScore >= 0.7) {
+      if (timer) {
+        clearTimeout(timer);
+        setTimer(null);
+      }
+      setComboCount((prev) => prev + 1);
+    } else {
+      if (!timer) {
+        const newTimer = setTimeout(() => {
+          setComboCount(0);
+        }, 3000);
+        setTimer(newTimer);
+      }
+    }
+  }, [focusScore]);
+
   const handleEnableObjectDetection = () => {
     enableObjectDetection();
     setObjectDetectionEnabled(true);
@@ -83,12 +102,12 @@ export default function App() {
         Webcam Object, Face, and Gesture Detection
       </h1>
       <NavigationBar position="top">
-        <Button onClick={handleEnableObjectDetection} color="bg-blue-500">
+        {/* <Button onClick={handleEnableObjectDetection} color="bg-blue-500">
           Enable Object Detection
         </Button>
         <Button onClick={handleDisableObjectDetection} color="bg-red-500">
           Disable Object Detection
-        </Button>
+        </Button> */}
         <Button
           onClick={handleEnableFaceAndGestureDetection}
           color="bg-blue-500"
@@ -140,6 +159,15 @@ export default function App() {
               </div>
             </>
           )}
+        </div>
+        <div className="fixed bottom-4 right-4">
+          <div
+            className={`text-5xl font-bold text-purple-600 animate-bounce ${
+              comboCount > 0 ? "visible" : "invisible"
+            }`}
+          >
+            Combo: {comboCount}
+          </div>
         </div>
       </div>
     </div>
