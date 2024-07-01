@@ -2,15 +2,15 @@ import React from "react";
 
 interface ButtonProps {
   onClick: () => void;
-  children: React.ReactNode;
   color: string;
+  children: React.ReactNode;
 }
 
-export default function Button({ onClick, children, color }: ButtonProps) {
+export default function Button({ onClick, color, children }: ButtonProps) {
   return (
     <button
       onClick={onClick}
-      className={`m-2 px-4 py-2 ${color} text-white rounded-full`}
+      className={`${color} text-white py-2 px-4 rounded m-1 sm:py-1 sm:px-2 sm:text-xs`}
     >
       {children}
     </button>

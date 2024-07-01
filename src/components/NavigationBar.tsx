@@ -12,7 +12,7 @@ export default function NavigationBar({
   const navClass = position === "top" ? "top-0" : "bottom-0";
   return (
     <div
-      className={`fixed ${navClass} w-full bg-gray-800 p-2 flex justify-center`}
+      className={`fixed ${navClass} w-full bg-gray-800 p-2 flex justify-center flex-wrap space-x-4`}
     >
       {children}
     </div>

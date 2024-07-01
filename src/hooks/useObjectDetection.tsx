@@ -5,11 +5,9 @@ import {
   ObjectDetector,
 } from "@mediapipe/tasks-vision";
 import * as bodyPix from "@tensorflow-models/body-pix";
+import { BodyPix } from "@tensorflow-models/body-pix/dist/body_pix_model";
 import { useCallback, useEffect, useRef, useState } from "react";
 import MEDIAPIPE_CONFIG from "../constants/mediapipe";
-
-// BodyPix 타입을 명시적으로 가져옵니다
-import { BodyPix } from "@tensorflow-models/body-pix/dist/body_pix_model";
 
 export default function useObjectDetection(
   videoRef: React.RefObject<HTMLVideoElement>,
@@ -17,8 +15,9 @@ export default function useObjectDetection(
 ) {
   const objectDetectorRef = useRef<ObjectDetector | null>(null);
   const detectionsRef = useRef<Detection[]>([]);
-  const bodyPixNetRef = useRef<BodyPix | null>(null); // BodyPix 인스턴스 저장
+  const bodyPixNetRef = useRef<BodyPix | null>(null);
   const [webcamRunning, setWebcamRunning] = useState<boolean>(false);
+  const [personCount, setPersonCount] = useState<number>(0);
 
   const initializeObjectDetector =
     useCallback(async (): Promise<ObjectDetector> => {
@@ -43,7 +42,6 @@ export default function useObjectDetection(
       objectDetectorRef.current = objectDetector;
       console.log("ObjectDetector initialized");
 
-      // BodyPix 모델을 초기화합니다
       const bodyPixNet = await bodyPix.load();
       bodyPixNetRef.current = bodyPixNet;
       console.log("BodyPix initialized");
@@ -64,6 +62,13 @@ export default function useObjectDetection(
     );
 
     detectionsRef.current = detectionResult.detections;
+
+    const personDetections = detectionResult.detections.filter((detection) =>
+      detection.categories.some(
+        (category) => category.categoryName === "person"
+      )
+    );
+    setPersonCount(personDetections.length);
 
     return detectionResult;
   }, [webcamRunning, videoRef]);
@@ -86,6 +91,16 @@ export default function useObjectDetection(
 
         videoRef.current.onloadeddata = () => {
           videoRef.current?.play();
+
+          const settings = stream.getVideoTracks()[0].getSettings();
+          console.log(`Video resolution: ${settings.width}x${settings.height}`);
+
+          const canvas = canvasRef.current;
+          if (canvas && videoRef.current) {
+            canvas.width = settings.width || 1280;
+            canvas.height = settings.height || 720;
+          }
+
           setWebcamRunning(true);
           console.log("Webcam enabled for object detection");
         };
@@ -95,7 +110,7 @@ export default function useObjectDetection(
     } else {
       console.log("ObjectDetector or BodyPix is not initialized.");
     }
-  }, [videoRef]);
+  }, [videoRef, canvasRef]);
 
   const disableWebcam = useCallback(() => {
     if (videoRef.current && videoRef.current.srcObject) {
@@ -191,12 +206,13 @@ export default function useObjectDetection(
         cancelAnimationFrame(animationFrameId);
       }
     };
-  }, [webcamRunning, predictObjects, drawResults]);
+  }, [webcamRunning, predictObjects, drawResults, videoRef]);
 
   return {
     enableWebcam,
     disableWebcam,
     detections: detectionsRef.current,
     webcamRunning,
+    personCount,
   };
 }

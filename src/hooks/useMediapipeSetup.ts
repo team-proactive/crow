@@ -13,16 +13,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { PredictWebcamResultType } from "../../types/mediapipe";
 import MEDIAPIPE_CONFIG from "../constants/mediapipe";
 
-/**
- * MediaPipe 설정을 관리하는 커스텀 훅
- *
- * 이 훅은 웹캠을 활성화하고 비디오에서 객체 감지, 얼굴 랜드마크, 제스처 인식을 수행합니다.
- *
- * @param videoRef - 웹캠 비디오 요소의 RefObject
- * @param canvasRef - 캔버스 요소의 RefObject
- * @param bodyPixNet - 초기화된 BodyPix 모델
- * @returns - enableWebcam, disableWebcam, predictWebcam, webcamRunning을 포함하는 객체
- */
 export default function useMediapipeSetup(
   videoRef: React.RefObject<HTMLVideoElement>,
   canvasRef: React.RefObject<HTMLCanvasElement>,
@@ -34,18 +24,20 @@ export default function useMediapipeSetup(
   const detectionsRef = useRef<Detection[]>([]);
   const blendShapesRef = useRef<FaceLandmarkerResult["faceBlendshapes"]>([]);
   const gesturesRef = useRef<GestureRecognizerResult["gestures"]>([]);
-  const handednessesRef = useRef<GestureRecognizerResult["handednesses"]>([]);
+  const handednessesRef = useRef<GestureRecognizerResult["handedness"]>([]);
   const focusScoreRef = useRef<number>(0);
   const interestScoreRef = useRef<number>(0);
   const interestRatingRef = useRef<string>("");
   const [webcamRunning, setWebcamRunning] = useState<boolean>(false);
   const [renderTrigger, setRenderTrigger] = useState<number>(0);
 
-  /**
-   * ObjectDetector를 VIDEO 모드로 초기화하는 함수
-   *
-   * @returns - 초기화된 ObjectDetector 인스턴스
-   */
+  const [objectDetectionEnabled, setObjectDetectionEnabled] =
+    useState<boolean>(false);
+  const [faceDetectionEnabled, setFaceDetectionEnabled] =
+    useState<boolean>(false);
+  const [gestureDetectionEnabled, setGestureDetectionEnabled] =
+    useState<boolean>(false);
+
   const initializeObjectDetector =
     useCallback(async (): Promise<ObjectDetector> => {
       const vision = await FilesetResolver.forVisionTasks(
@@ -57,17 +49,12 @@ export default function useMediapipeSetup(
           delegate: "GPU",
         },
         scoreThreshold: 0.5,
-        runningMode: MEDIAPIPE_CONFIG.RUNNING_MODES.video, // VIDEO 모드로 설정
+        runningMode: MEDIAPIPE_CONFIG.RUNNING_MODES.video,
         maxResults: -1,
       });
       return objectDetector;
     }, []);
 
-  /**
-   * FaceLandmarker를 LIVE_STREAM 모드로 초기화하는 함수
-   *
-   * @returns - 초기화된 FaceLandmarker 인스턴스
-   */
   const initializeFaceLandmarker =
     useCallback(async (): Promise<FaceLandmarker> => {
       const vision = await FilesetResolver.forVisionTasks(
@@ -79,17 +66,12 @@ export default function useMediapipeSetup(
           delegate: "GPU",
         },
         outputFaceBlendshapes: true,
-        runningMode: MEDIAPIPE_CONFIG.RUNNING_MODES.liveStream, // LIVE_STREAM 모드
-        numFaces: 1,
+        runningMode: MEDIAPIPE_CONFIG.RUNNING_MODES.liveStream,
+        numFaces: 10,
       });
       return faceLandmarker;
     }, []);
 
-  /**
-   * GestureRecognizer를 LIVE_STREAM 모드로 초기화하는 함수
-   *
-   * @returns - 초기화된 GestureRecognizer 인스턴스
-   */
   const initializeGestureRecognizer =
     useCallback(async (): Promise<GestureRecognizer> => {
       const vision = await FilesetResolver.forVisionTasks(
@@ -102,16 +84,13 @@ export default function useMediapipeSetup(
             modelAssetPath: MEDIAPIPE_CONFIG.MODEL_URLS.gestureRecognizer,
             delegate: "GPU",
           },
-          runningMode: MEDIAPIPE_CONFIG.RUNNING_MODES.liveStream, // LIVE_STREAM 모드
+          runningMode: MEDIAPIPE_CONFIG.RUNNING_MODES.liveStream,
           numHands: 2,
         }
       );
       return gestureRecognizer;
     }, []);
 
-  /**
-   * 컴포넌트가 마운트될 때 감지기들을 초기화합니다.
-   */
   useEffect(() => {
     const initializeDetectors = async () => {
       const [objectDetector, faceLandmarker, gestureRecognizer] =
@@ -134,55 +113,43 @@ export default function useMediapipeSetup(
     initializeGestureRecognizer,
   ]);
 
-  /**
-   * 웹캠 비디오에서 예측을 수행하는 함수
-   *
-   * @returns - 객체 감지, 얼굴 랜드마크, 제스처 인식 결과를 포함하는 객체
-   */
   const predictWebcam =
     useCallback(async (): Promise<PredictWebcamResultType | null> => {
-      if (
-        !webcamRunning ||
-        !videoRef.current ||
-        !objectDetectorRef.current ||
-        !faceLandmarkerRef.current ||
-        !gestureRecognizerRef.current ||
-        !bodyPixNet
-      ) {
+      if (!webcamRunning || !videoRef.current || !bodyPixNet) {
         return null;
       }
 
       const startTimeMs = performance.now();
-      const detectionResult = await objectDetectorRef.current.detectForVideo(
-        videoRef.current,
-        startTimeMs
-      );
 
-      // 'person' 카테고리의 bounding box만 필터링
-      const personDetections = detectionResult.detections.filter(
-        (detection) =>
-          detection.categories[0].categoryName.toLowerCase() === "person"
-      );
-
+      let detectionResult: { detections: Detection[] } = { detections: [] };
       let faceLandmarkerResult: FaceLandmarkerResult = {
         faceLandmarks: [],
         faceBlendshapes: [],
         facialTransformationMatrixes: [],
       };
       let gestureRecognizerResult: GestureRecognizerResult = {
+        handednesses: [],
         gestures: [],
         landmarks: [],
         worldLandmarks: [],
         handedness: [],
-        handednesses: [],
       };
 
-      if (personDetections.length > 0) {
-        // 비디오 프레임에서 bounding box로 자른 부분을 인식에 사용
+      if (objectDetectionEnabled && objectDetectorRef.current) {
+        detectionResult = await objectDetectorRef.current.detectForVideo(
+          videoRef.current,
+          startTimeMs
+        );
+      }
+
+      if (faceDetectionEnabled && faceLandmarkerRef.current) {
         faceLandmarkerResult = await faceLandmarkerRef.current.detectForVideo(
           videoRef.current,
           startTimeMs
         );
+      }
+
+      if (gestureDetectionEnabled && gestureRecognizerRef.current) {
         gestureRecognizerResult =
           await gestureRecognizerRef.current.recognizeForVideo(
             videoRef.current,
@@ -191,23 +158,21 @@ export default function useMediapipeSetup(
       }
 
       return {
-        detectionResult: { detections: personDetections },
+        detectionResult,
         faceLandmarkerResult,
         gestureRecognizerResult,
       };
-    }, [webcamRunning, videoRef, bodyPixNet]);
+    }, [
+      webcamRunning,
+      videoRef,
+      bodyPixNet,
+      objectDetectionEnabled,
+      faceDetectionEnabled,
+      gestureDetectionEnabled,
+    ]);
 
-  /**
-   * 웹캠을 활성화하는 함수
-   */
   const enableWebcam = useCallback(async () => {
-    if (
-      objectDetectorRef.current &&
-      faceLandmarkerRef.current &&
-      gestureRecognizerRef.current &&
-      videoRef.current &&
-      bodyPixNet
-    ) {
+    if (videoRef.current && bodyPixNet) {
       try {
         const constraints = {
           video: {
@@ -231,9 +196,6 @@ export default function useMediapipeSetup(
     }
   }, [videoRef, bodyPixNet]);
 
-  /**
-   * 웹캠을 비활성화하는 함수
-   */
   const disableWebcam = useCallback(() => {
     if (videoRef.current && videoRef.current.srcObject) {
       const stream = videoRef.current.srcObject as MediaStream;
@@ -244,16 +206,6 @@ export default function useMediapipeSetup(
     }
   }, [videoRef]);
 
-  /**
-   * 결과를 그리는 함수
-   *
-   * @param faceLandmarks - 얼굴 랜드마크
-   * @param detections - 객체 감지 결과
-   * @param gestureRecognizerResult - 제스처 인식 결과
-   * @param focusScore - 집중도 점수
-   * @param interestScore - 흥미도 점수
-   * @param segmentation - 세그멘테이션 결과
-   */
   const drawResults = useCallback(
     (
       faceLandmarks: FaceLandmarkerResult["faceLandmarks"],
@@ -285,8 +237,8 @@ export default function useMediapipeSetup(
 
         const drawingUtils = new DrawingUtils(ctx);
 
-        // 얼굴 랜드마크 그리기
         if (
+          faceDetectionEnabled &&
           MEDIAPIPE_CONFIG.LANDMARK_VISUALIZATION.showFaceLandmarks &&
           faceLandmarks
         ) {
@@ -339,27 +291,19 @@ export default function useMediapipeSetup(
           }
         }
 
-        // 객체 감지 결과 그리기
-        if (MEDIAPIPE_CONFIG.LANDMARK_VISUALIZATION.showObjectDetections) {
+        if (
+          objectDetectionEnabled &&
+          MEDIAPIPE_CONFIG.LANDMARK_VISUALIZATION.showObjectDetections &&
+          detections.length > 0
+        ) {
           for (const detection of detections) {
             if (detection.boundingBox) {
+              const { originX, originY, width, height } = detection.boundingBox;
               ctx.strokeStyle =
                 MEDIAPIPE_CONFIG.COLOR_SETTINGS.objectDetection.boundingBox.color;
               ctx.lineWidth =
                 MEDIAPIPE_CONFIG.COLOR_SETTINGS.objectDetection.boundingBox.lineWidth;
-              // bounding box 크기를 0.5배로 줄이기
-              const scaledBoundingBox = {
-                originX: detection.boundingBox.originX,
-                originY: detection.boundingBox.originY,
-                width: detection.boundingBox.width,
-                height: detection.boundingBox.height,
-              };
-              ctx.strokeRect(
-                scaledBoundingBox.originX,
-                scaledBoundingBox.originY,
-                scaledBoundingBox.width,
-                scaledBoundingBox.height
-              );
+              ctx.strokeRect(originX, originY, width, height);
 
               ctx.fillStyle =
                 MEDIAPIPE_CONFIG.COLOR_SETTINGS.objectDetection.text.color;
@@ -367,17 +311,15 @@ export default function useMediapipeSetup(
                 `${detection.categories[0].categoryName} - ${(
                   detection.categories[0].score * 100
                 ).toFixed(2)}%`,
-                scaledBoundingBox.originX,
-                scaledBoundingBox.originY > 100
-                  ? scaledBoundingBox.originY - 5
-                  : 10
+                originX,
+                originY > 100 ? originY - 5 : 10
               );
             }
           }
         }
 
-        // 손 랜드마크 그리기
         if (
+          gestureDetectionEnabled &&
           MEDIAPIPE_CONFIG.LANDMARK_VISUALIZATION.showHandLandmarks &&
           gestureRecognizerResult.landmarks
         ) {
@@ -393,24 +335,17 @@ export default function useMediapipeSetup(
             );
           }
         }
-
-        ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
-        ctx.fillRect(0, 0, canvas.width, 50);
-        ctx.fillStyle = "white";
-        ctx.font = "12px Arial";
-        ctx.fillText(`Focus Score: ${focusScore.toFixed(2)}%`, 10, 25);
-        ctx.fillText(`Interest Score: ${interestScore.toFixed(2)}%`, 200, 25);
       }
     },
-    [canvasRef, videoRef]
+    [
+      canvasRef,
+      videoRef,
+      faceDetectionEnabled,
+      objectDetectionEnabled,
+      gestureDetectionEnabled,
+    ]
   );
 
-  /**
-   * 집중도 점수를 계산하는 함수
-   *
-   * @param blendShapes - 얼굴 블렌드쉐이프
-   * @returns - 집중도 점수
-   */
   const calculateFocusScore = useCallback(
     (blendShapes: FaceLandmarkerResult["faceBlendshapes"]) => {
       if (blendShapes.length === 0) return 0;
@@ -431,12 +366,6 @@ export default function useMediapipeSetup(
     []
   );
 
-  /**
-   * 흥미도 점수를 계산하는 함수
-   *
-   * @param blendShapes - 얼굴 블렌드쉐이프
-   * @returns - 흥미도 점수
-   */
   const calculateInterestScore = useCallback(
     (blendShapes: FaceLandmarkerResult["faceBlendshapes"]) => {
       if (blendShapes.length === 0) return 0;
@@ -459,12 +388,6 @@ export default function useMediapipeSetup(
     []
   );
 
-  /**
-   * 흥미도를 등급으로 변환하는 함수
-   *
-   * @param interestScore - 흥미도 점수
-   * @returns - 흥미도 등급
-   */
   const getInterestRating = useCallback((interestScore: number) => {
     if (interestScore >= 80) return "아주좋음";
     if (interestScore >= 60) return "좋음";
@@ -473,7 +396,6 @@ export default function useMediapipeSetup(
     return "아주나쁨";
   }, []);
 
-  // useEffect로 predictWebcam 함수 호출 및 결과 시각화
   useEffect(() => {
     let animationFrameId: number;
     const predictLoop = async () => {
@@ -490,7 +412,7 @@ export default function useMediapipeSetup(
       detectionsRef.current = detectionResult.detections;
       blendShapesRef.current = faceLandmarkerResult.faceBlendshapes;
       gesturesRef.current = gestureRecognizerResult.gestures;
-      handednessesRef.current = gestureRecognizerResult.handednesses;
+      handednessesRef.current = gestureRecognizerResult.handedness;
 
       focusScoreRef.current = calculateFocusScore(
         faceLandmarkerResult.faceBlendshapes
@@ -547,7 +469,16 @@ export default function useMediapipeSetup(
   return {
     enableWebcam,
     disableWebcam,
-    predictWebcam,
     webcamRunning,
+    blendShapes: blendShapesRef.current,
+    gestures: gesturesRef.current,
+    handednesses: handednessesRef.current,
+    focusScore: focusScoreRef.current,
+    interestScore: interestScoreRef.current,
+    interestRating: interestRatingRef.current,
+    detections: detectionsRef.current,
+    setObjectDetectionEnabled,
+    setFaceDetectionEnabled,
+    setGestureDetectionEnabled,
   };
 }

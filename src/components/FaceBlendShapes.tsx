@@ -6,7 +6,7 @@ interface FaceBlendShapesProps {
 
 export default function FaceBlendShapes({ blendShapes }: FaceBlendShapesProps) {
   return (
-    <div className="absolute top-4 right-4 bg-white p-2 rounded shadow">
+    <div className="absolute top-4 right-4 bg-white p-2 rounded shadow max-h-full overflow-y-auto">
       <h2 className="text-xl font-semibold">Face Blend Shapes</h2>
       <ul>
         {blendShapes.length > 0 &&

@@ -14,16 +14,6 @@ import {
 } from "../../types/mediapipe";
 import MEDIAPIPE_CONFIG from "../constants/mediapipe";
 
-/**
- * 얼굴 및 제스처 인식을 관리하는 커스텀 훅
- *
- * 이 훅은 웹캠을 활성화하고 비디오에서 얼굴 랜드마크, 제스처 인식을 수행합니다.
- *
- * @param videoRef - 웹캠 비디오 요소의 RefObject
- * @param canvasRef - 캔버스 요소의 RefObject
- * @param bodyPixNet - 초기화된 BodyPix 모델
- * @returns - enableWebcam, disableWebcam, predictWebcam, webcamRunning을 포함하는 객체
- */
 export default function useFaceAndGestureDetection(
   videoRef: React.RefObject<HTMLVideoElement>,
   canvasRef: React.RefObject<HTMLCanvasElement>,
@@ -40,12 +30,8 @@ export default function useFaceAndGestureDetection(
   const interestRatingRef = useRef<string>("");
   const [webcamRunning, setWebcamRunning] = useState<boolean>(false);
   const [renderTrigger, setRenderTrigger] = useState<number>(0);
+  const [loading, setLoading] = useState<boolean>(false); // 로딩 상태 추가
 
-  /**
-   * FaceLandmarker를 LIVE_STREAM 모드로 초기화하는 함수
-   *
-   * @returns - 초기화된 FaceLandmarker 인스턴스
-   */
   const initializeFaceLandmarker =
     useCallback(async (): Promise<FaceLandmarker> => {
       const vision = await FilesetResolver.forVisionTasks(
@@ -57,17 +43,12 @@ export default function useFaceAndGestureDetection(
           delegate: "GPU",
         },
         outputFaceBlendshapes: true,
-        runningMode: MEDIAPIPE_CONFIG.RUNNING_MODES.liveStream, // LIVE_STREAM 모드
+        runningMode: MEDIAPIPE_CONFIG.RUNNING_MODES.liveStream,
         numFaces: 10,
       });
       return faceLandmarker;
     }, []);
 
-  /**
-   * GestureRecognizer를 LIVE_STREAM 모드로 초기화하는 함수
-   *
-   * @returns - 초기화된 GestureRecognizer 인스턴스
-   */
   const initializeGestureRecognizer =
     useCallback(async (): Promise<GestureRecognizer> => {
       const vision = await FilesetResolver.forVisionTasks(
@@ -80,16 +61,13 @@ export default function useFaceAndGestureDetection(
             modelAssetPath: MEDIAPIPE_CONFIG.MODEL_URLS.gestureRecognizer,
             delegate: "GPU",
           },
-          runningMode: MEDIAPIPE_CONFIG.RUNNING_MODES.liveStream, // LIVE_STREAM 모드
+          runningMode: MEDIAPIPE_CONFIG.RUNNING_MODES.liveStream,
           numHands: 2,
         }
       );
       return gestureRecognizer;
     }, []);
 
-  /**
-   * 컴포넌트가 마운트될 때 감지기들을 초기화합니다.
-   */
   useEffect(() => {
     const initializeDetectors = async () => {
       const [faceLandmarker, gestureRecognizer] = await Promise.all([
@@ -105,11 +83,6 @@ export default function useFaceAndGestureDetection(
     initializeDetectors();
   }, [initializeFaceLandmarker, initializeGestureRecognizer]);
 
-  /**
-   * 웹캠 비디오에서 예측을 수행하는 함수
-   *
-   * @returns - 객체 감지, 얼굴 랜드마크, 제스처 인식 결과를 포함하는 객체
-   */
   const predictWebcam =
     useCallback(async (): Promise<PredictWebcamResultType | null> => {
       if (
@@ -136,7 +109,6 @@ export default function useFaceAndGestureDetection(
           startTimeMs
         );
 
-      // 객체 감지 결과는 빈 배열로 설정합니다.
       const detectionResult = { detections: detectionsRef.current };
 
       return {
@@ -146,9 +118,6 @@ export default function useFaceAndGestureDetection(
       };
     }, [webcamRunning, videoRef, bodyPixNet]);
 
-  /**
-   * 웹캠을 활성화하는 함수
-   */
   const enableWebcam = useCallback(async () => {
     if (
       faceLandmarkerRef.current &&
@@ -156,6 +125,7 @@ export default function useFaceAndGestureDetection(
       videoRef.current &&
       bodyPixNet
     ) {
+      setLoading(true); // 로딩 시작
       try {
         const constraints = {
           video: {
@@ -169,11 +139,9 @@ export default function useFaceAndGestureDetection(
         videoRef.current.onloadeddata = () => {
           videoRef.current?.play();
 
-          // 비디오의 실제 해상도를 확인하여 로그에 출력
           const settings = stream.getVideoTracks()[0].getSettings();
           console.log(`Video resolution: ${settings.width}x${settings.height}`);
 
-          // 캔버스 해상도를 비디오 해상도와 일치시키기
           const canvas = canvasRef.current;
           if (canvas && videoRef.current) {
             canvas.width = settings.width || 1280;
@@ -181,38 +149,31 @@ export default function useFaceAndGestureDetection(
           }
 
           setWebcamRunning(true);
+          setLoading(false); // 로딩 종료
           console.log("Webcam enabled");
         };
       } catch (err) {
         console.error("웹캠 접근 오류:", err);
+        setLoading(false); // 로딩 종료
       }
     } else {
       console.log("하나 이상의 의존성이 누락되었습니다.");
+      setLoading(false); // 로딩 종료
     }
   }, [videoRef, bodyPixNet, canvasRef]);
 
-  /**
-   * 웹캠을 비활성화하는 함수
-   */
   const disableWebcam = useCallback(() => {
+    setLoading(true); // 로딩 시작
     if (videoRef.current && videoRef.current.srcObject) {
       const stream = videoRef.current.srcObject as MediaStream;
       stream.getTracks().forEach((track) => track.stop());
       videoRef.current.srcObject = null;
       setWebcamRunning(false);
+      setLoading(false); // 로딩 종료
       console.log("Webcam disabled");
     }
   }, [videoRef]);
 
-  /**
-   * 결과를 그리는 함수
-   *
-   * @param faceLandmarks - 얼굴 랜드마크
-   * @param gestureRecognizerResult - 제스처 인식 결과
-   * @param focusScore - 집중도 점수
-   * @param interestScore - 흥미도 점수
-   * @param segmentation - 세그멘테이션 결과
-   */
   const drawResults = useCallback(
     (
       faceLandmarks: FaceLandmarkerResult["faceLandmarks"],
@@ -243,7 +204,6 @@ export default function useFaceAndGestureDetection(
 
         const drawingUtils = new DrawingUtils(ctx);
 
-        // 얼굴 랜드마크 그리기
         if (
           MEDIAPIPE_CONFIG.LANDMARK_VISUALIZATION.showFaceLandmarks &&
           faceLandmarks
@@ -297,7 +257,6 @@ export default function useFaceAndGestureDetection(
           }
         }
 
-        // 손 랜드마크 그리기
         if (
           MEDIAPIPE_CONFIG.LANDMARK_VISUALIZATION.showHandLandmarks &&
           gestureRecognizerResult.landmarks
@@ -319,12 +278,6 @@ export default function useFaceAndGestureDetection(
     [canvasRef, videoRef]
   );
 
-  /**
-   * 집중도 점수를 계산하는 함수
-   *
-   * @param blendShapes - 얼굴 블렌드쉐이프
-   * @returns - 집중도 점수
-   */
   const calculateFocusScore = useCallback(
     (blendShapes: FaceLandmarkerResult["faceBlendshapes"]) => {
       if (blendShapes.length === 0) return 0;
@@ -345,12 +298,6 @@ export default function useFaceAndGestureDetection(
     []
   );
 
-  /**
-   * 흥미도 점수를 계산하는 함수
-   *
-   * @param blendShapes - 얼굴 블렌드쉐이프
-   * @returns - 흥미도 점수
-   */
   const calculateInterestScore = useCallback(
     (blendShapes: FaceLandmarkerResult["faceBlendshapes"]) => {
       if (blendShapes.length === 0) return 0;
@@ -373,12 +320,6 @@ export default function useFaceAndGestureDetection(
     []
   );
 
-  /**
-   * 흥미도를 등급으로 변환하는 함수
-   *
-   * @param interestScore - 흥미도 점수
-   * @returns - 흥미도 등급
-   */
   const getInterestRating = useCallback((interestScore: number) => {
     if (interestScore >= 80) return "아주좋음";
     if (interestScore >= 60) return "좋음";
@@ -387,7 +328,6 @@ export default function useFaceAndGestureDetection(
     return "아주나쁨";
   }, []);
 
-  // useEffect로 predictWebcam 함수 호출 및 결과 시각화
   useEffect(() => {
     let animationFrameId: number;
     const predictLoop = async () => {
@@ -467,5 +407,6 @@ export default function useFaceAndGestureDetection(
     focusScore: focusScoreRef.current,
     interestScore: interestScoreRef.current,
     interestRating: interestRatingRef.current,
+    loading, // 로딩 상태 반환
   };
 }
